@@ -329,10 +329,20 @@ def _build_context_overrides(snapshot: dict) -> dict:
 def _build_extra_headers(raw_headers: Optional[dict]) -> dict:
     if not raw_headers:
         return {}
-    excluded = {"cookie", "content-length"}
+    excluded_prefixes = ("sec-fetch-",)
+    excluded = {
+        "cookie",
+        "content-length",
+        "host",
+        "connection",
+        "upgrade-insecure-requests",
+    }
     headers = {}
     for key, value in raw_headers.items():
-        if not key or key.lower() in excluded or value is None:
+        if not key or value is None:
+            continue
+        lower_key = key.lower()
+        if lower_key in excluded or any(lower_key.startswith(p) for p in excluded_prefixes):
             continue
         headers[key] = value
     return headers
@@ -655,19 +665,37 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
                 log_time(f"目标URL: {search_url}")
 
                 # 先监听搜索接口响应，再执行导航，避免错过首次请求
-                async with page.expect_response(
-                    is_search_results_response, timeout=30000
-                ) as initial_response_info:
-                    await page.goto(
-                        search_url, wait_until="domcontentloaded", timeout=60000
-                    )
+                try:
+                    async with page.expect_response(
+                        is_search_results_response, timeout=30000
+                    ) as initial_response_info:
+                        await page.goto(
+                            search_url, wait_until="domcontentloaded", timeout=60000
+                        )
+                    initial_response = await initial_response_info.value
+                except PlaywrightTimeoutError as e:
+                    current_url = page.url
+                    if _is_login_url(current_url):
+                        raise LoginRequiredError(
+                            f"Login required: redirected to {current_url} (cookies/state likely expired)"
+                        ) from e
+                    baxia_dialog = page.locator("div.baxia-dialog-mask")
+                    middleware_widget = page.locator("div.J_MIDDLEWARE_FRAME_WIDGET")
+                    if (
+                        "punish" in current_url
+                        or await baxia_dialog.is_visible()
+                        or await middleware_widget.is_visible()
+                    ):
+                        raise RiskControlError(
+                            f"检测到反爬风控拦截（滑块验证码或拦截页，当前URL: {current_url}）。"
+                            "建议在 .env 中设置 RUN_HEADLESS=false，并在浏览器中完成验证或更新登录态。"
+                        ) from e
+                    raise
+
                 if _is_login_url(page.url):
                     raise LoginRequiredError(
                         f"Login required: redirected to {page.url} (cookies/state likely expired)"
                     )
-
-                # 捕获初始搜索的API数据
-                initial_response = await initial_response_info.value
 
                 # 等待页面加载出关键筛选元素，以确认已成功进入搜索结果页
                 try:

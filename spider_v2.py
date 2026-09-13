@@ -44,7 +44,7 @@ async def main():
     else:
         repository = SqliteTaskRepository()
         tasks = await repository.find_all()
-        tasks_config = [task.dict() for task in tasks]
+        tasks_config = [task.model_dump() if hasattr(task, 'model_dump') else task.dict() for task in tasks]
 
     def normalize_keywords(value):
         if value is None:
