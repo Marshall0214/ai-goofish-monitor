@@ -6,8 +6,11 @@ from urllib.parse import urlparse
 
 from src.infrastructure.config.env_manager import env_manager
 from src.infrastructure.config.settings import (
+    DEFAULT_NOTIFICATION_LINK_TYPES,
     DEFAULT_TELEGRAM_API_BASE_URL,
+    VALID_NOTIFICATION_LINK_TYPES,
     NotificationSettings,
+    parse_notification_link_types,
 )
 
 
@@ -26,7 +29,7 @@ NOTIFICATION_FIELD_MAP = {
     "WEBHOOK_CONTENT_TYPE": "webhook_content_type",
     "WEBHOOK_QUERY_PARAMETERS": "webhook_query_parameters",
     "WEBHOOK_BODY": "webhook_body",
-    "PCURL_TO_MOBILE": "pcurl_to_mobile",
+    "NOTIFICATION_LINK_TYPES": "notification_link_types",
 }
 
 CHANNEL_NOTIFICATION_FIELDS = {
@@ -109,7 +112,7 @@ def build_notification_settings_response(
         "WEBHOOK_CONTENT_TYPE": notification_settings.webhook_content_type,
         "WEBHOOK_QUERY_PARAMETERS": notification_settings.webhook_query_parameters or "",
         "WEBHOOK_BODY": notification_settings.webhook_body or "",
-        "PCURL_TO_MOBILE": notification_settings.pcurl_to_mobile,
+        "NOTIFICATION_LINK_TYPES": sorted(notification_settings.link_types_set()),
     }
     for field in SECRET_NOTIFICATION_FIELDS:
         attr_name = NOTIFICATION_FIELD_MAP[field]
@@ -207,7 +210,7 @@ def prepare_notification_test_settings(
 
     current_settings = existing_settings or load_notification_settings()
     included_env_fields = set(CHANNEL_NOTIFICATION_FIELDS[channel])
-    included_env_fields.add("PCURL_TO_MOBILE")
+    included_env_fields.add("NOTIFICATION_LINK_TYPES")
     merged_values = _build_channel_test_values(current_settings, included_env_fields)
 
     for env_name, raw_value in patch_payload.items():
@@ -240,7 +243,7 @@ def _build_channel_test_values(
     values["telegram_api_base_url"] = DEFAULT_TELEGRAM_API_BASE_URL
     values["webhook_method"] = "POST"
     values["webhook_content_type"] = "JSON"
-    values["pcurl_to_mobile"] = True
+    values["notification_link_types"] = DEFAULT_NOTIFICATION_LINK_TYPES
 
     for env_name in included_env_fields:
         attr_name = NOTIFICATION_FIELD_MAP[env_name]
@@ -269,7 +272,10 @@ def load_notification_settings() -> NotificationSettings:
             "webhook_content_type": _normalize_existing_text(env_manager.get_value("WEBHOOK_CONTENT_TYPE")) or "JSON",
             "webhook_query_parameters": _normalize_existing_text(env_manager.get_value("WEBHOOK_QUERY_PARAMETERS")),
             "webhook_body": _normalize_existing_text(env_manager.get_value("WEBHOOK_BODY")),
-            "pcurl_to_mobile": _env_bool(env_manager.get_value("PCURL_TO_MOBILE"), True),
+            "notification_link_types": (
+                _normalize_existing_text(env_manager.get_value("NOTIFICATION_LINK_TYPES"))
+                or DEFAULT_NOTIFICATION_LINK_TYPES
+            ),
         }
     )
 
@@ -281,12 +287,29 @@ def _build_notification_settings_model(values: dict) -> NotificationSettings:
 
 
 def _normalize_patch_value(env_name: str, value):
-    if env_name == "PCURL_TO_MOBILE":
-        return bool(value)
+    if env_name == "NOTIFICATION_LINK_TYPES":
+        return _normalize_link_types_value(value)
     if value is None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _normalize_link_types_value(value) -> str:
+    """把前端传来的链接类型（列表或逗号字符串）归一化成逗号分隔字符串。
+
+    这里刻意不像其它字段那样把空值折成 None（那意味着“清空/使用默认值”），
+    因为空选择应该在校验阶段被明确拒绝，而不是静默回退到默认的双链接。
+    """
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple, set)):
+        raw_tokens = value
+    else:
+        raw_tokens = str(value).split(",")
+    tokens = {str(token).strip().lower() for token in raw_tokens if str(token).strip()}
+    valid_tokens = tokens & VALID_NOTIFICATION_LINK_TYPES
+    return ",".join(sorted(valid_tokens))
 
 
 def _normalize_existing_text(value: str | None) -> str | None:
@@ -343,6 +366,21 @@ def _validate_notification_settings(settings: NotificationSettings) -> None:
         "TELEGRAM_CHAT_ID",
         settings.telegram_chat_id,
     )
+
+    raw_link_types = {
+        token.strip().lower()
+        for token in str(settings.notification_link_types or "").split(",")
+        if token.strip()
+    }
+    invalid_link_types = raw_link_types - VALID_NOTIFICATION_LINK_TYPES
+    if invalid_link_types:
+        raise NotificationSettingsValidationError(
+            f"NOTIFICATION_LINK_TYPES 仅支持 mobile/desktop: {', '.join(sorted(invalid_link_types))}"
+        )
+    if not raw_link_types:
+        raise NotificationSettingsValidationError(
+            "NOTIFICATION_LINK_TYPES 至少需要选择一种链接类型（mobile/desktop）"
+        )
 
     if settings.webhook_method not in ALLOWED_WEBHOOK_METHODS:
         allowed = ", ".join(sorted(ALLOWED_WEBHOOK_METHODS))

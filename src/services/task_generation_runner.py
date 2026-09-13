@@ -30,6 +30,7 @@ def build_task_create(req: TaskGenerateRequest, criteria_file: str) -> TaskCreat
         personal_only=req.personal_only,
         min_price=req.min_price,
         max_price=req.max_price,
+        price_drop_target=req.price_drop_target,
         cron=req.cron,
         ai_prompt_base_file="prompts/base_prompt.txt",
         ai_prompt_criteria_file=criteria_file,

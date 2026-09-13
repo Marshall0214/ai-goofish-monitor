@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import type { NotificationSettings, NotificationSettingsUpdate, NotificationTestResponse } from '@/api/settings'
 
@@ -33,9 +33,10 @@ const WEBHOOK_HEADERS_EXAMPLE = '{"Authorization":"Bearer token"}'
 const WEBHOOK_QUERY_EXAMPLE = '{"task":"{{title}}"}'
 const WEBHOOK_BODY_EXAMPLE = '{"message":"{{content}}","price":"{{price}}"}'
 const WEBHOOK_TEMPLATE_VARIABLES = '{{title}}, {{content}}, {{price}}, {{reason}}, {{desktop_link}}, {{mobile_link}}'
-const mutableInitialValues = initialValues as Record<string, string | boolean | null | undefined>
-const mutableForm = form as Record<string, string | boolean | null | undefined>
+const mutableInitialValues = initialValues as Record<string, string | boolean | string[] | null | undefined>
+const mutableForm = form as Record<string, string | boolean | string[] | null | undefined>
 const mutableClearedFields = clearedFields as Record<string, boolean>
+const DEFAULT_LINK_TYPES = ['mobile', 'desktop']
 
 const secretFields = ['BARK_URL', 'GOTIFY_TOKEN', 'WX_BOT_URL', 'TELEGRAM_BOT_TOKEN', 'WEBHOOK_URL', 'WEBHOOK_HEADERS'] as const
 const channelFields: Record<ChannelKey, (keyof NotificationSettingsUpdate)[]> = {
@@ -56,7 +57,9 @@ function syncFromSettings(settings: NotificationSettings) {
   initialValues.WEBHOOK_CONTENT_TYPE = settings.WEBHOOK_CONTENT_TYPE ?? 'JSON'
   initialValues.WEBHOOK_QUERY_PARAMETERS = settings.WEBHOOK_QUERY_PARAMETERS ?? ''
   initialValues.WEBHOOK_BODY = settings.WEBHOOK_BODY ?? ''
-  initialValues.PCURL_TO_MOBILE = settings.PCURL_TO_MOBILE ?? true
+  initialValues.NOTIFICATION_LINK_TYPES = settings.NOTIFICATION_LINK_TYPES && settings.NOTIFICATION_LINK_TYPES.length
+    ? [...settings.NOTIFICATION_LINK_TYPES]
+    : [...DEFAULT_LINK_TYPES]
 
   Object.assign(form, initialValues, {
     BARK_URL: '',
@@ -100,6 +103,27 @@ function updateField(field: keyof NotificationSettingsUpdate, value: string) {
   mutableClearedFields[field as string] = false
 }
 
+function currentLinkTypes(): string[] {
+  const value = mutableForm.NOTIFICATION_LINK_TYPES
+  return Array.isArray(value) ? value : []
+}
+
+function isLinkTypeSelected(type: 'mobile' | 'desktop') {
+  return currentLinkTypes().includes(type)
+}
+
+function toggleLinkType(type: 'mobile' | 'desktop', selected: boolean) {
+  const existing = currentLinkTypes()
+  const next = selected
+    ? Array.from(new Set([...existing, type]))
+    : existing.filter((item) => item !== type)
+  if (next.length === 0) {
+    // 前端强制至少选中一种链接类型，忽略会导致清空的操作
+    return
+  }
+  mutableForm.NOTIFICATION_LINK_TYPES = next
+}
+
 function clearChannel(channel: ChannelKey) {
   for (const field of channelFields[channel]) {
     const key = field as string
@@ -120,7 +144,7 @@ function buildScopedPayload(channel?: ChannelKey): NotificationSettingsUpdate {
   const payload: NotificationSettingsUpdate = {}
   const mutablePayload = payload as Record<string, string | boolean | null | undefined>
   const includedFields = channel
-    ? new Set<string>([...channelFields[channel].map((field) => field as string), 'PCURL_TO_MOBILE'])
+    ? new Set<string>([...channelFields[channel].map((field) => field as string), 'NOTIFICATION_LINK_TYPES'])
     : null
   const textFields: (keyof NotificationSettingsUpdate)[] = [
     'NTFY_TOPIC_URL', 'GOTIFY_URL', 'TELEGRAM_CHAT_ID', 'TELEGRAM_API_BASE_URL', 'WEBHOOK_METHOD',
@@ -156,8 +180,12 @@ function buildScopedPayload(channel?: ChannelKey): NotificationSettingsUpdate {
     }
   }
 
-  if ((!includedFields || includedFields.has('PCURL_TO_MOBILE')) && form.PCURL_TO_MOBILE !== initialValues.PCURL_TO_MOBILE) {
-    payload.PCURL_TO_MOBILE = !!form.PCURL_TO_MOBILE
+  if (!includedFields || includedFields.has('NOTIFICATION_LINK_TYPES')) {
+    const current = [...currentLinkTypes()].sort()
+    const initial = [...(Array.isArray(initialValues.NOTIFICATION_LINK_TYPES) ? initialValues.NOTIFICATION_LINK_TYPES : [])].sort()
+    if (JSON.stringify(current) !== JSON.stringify(initial)) {
+      payload.NOTIFICATION_LINK_TYPES = current
+    }
   }
   return payload
 }
@@ -215,10 +243,25 @@ function resolveChannelBadge(channel: ChannelKey) {
             <div>
               <p class="text-sm font-semibold text-slate-900">{{ t('notifyPanel.globalBehavior') }}</p>
               <p class="text-sm text-slate-500">{{ t('notifyPanel.globalBehaviorDescription') }}</p>
+              <p class="text-xs text-slate-400">{{ t('notifyPanel.linkTypes.atLeastOneRequired') }}</p>
             </div>
-            <div class="flex items-center gap-3 rounded-full border border-slate-200 bg-slate-50 px-3 py-2">
-              <Switch id="pcurl" :model-value="!!form.PCURL_TO_MOBILE" @update:model-value="(value) => form.PCURL_TO_MOBILE = !!value" />
-              <Label for="pcurl" class="text-sm text-slate-700">{{ t('notifyPanel.preferMobileLink') }}</Label>
+            <div class="flex flex-wrap items-center gap-4 rounded-full border border-slate-200 bg-slate-50 px-4 py-2">
+              <div class="flex items-center space-x-2">
+                <Checkbox
+                  id="link-type-mobile"
+                  :model-value="isLinkTypeSelected('mobile')"
+                  @update:modelValue="(value) => toggleLinkType('mobile', value === true)"
+                />
+                <Label for="link-type-mobile" class="cursor-pointer text-sm text-slate-700">{{ t('notifyPanel.linkTypes.mobile') }}</Label>
+              </div>
+              <div class="flex items-center space-x-2">
+                <Checkbox
+                  id="link-type-desktop"
+                  :model-value="isLinkTypeSelected('desktop')"
+                  @update:modelValue="(value) => toggleLinkType('desktop', value === true)"
+                />
+                <Label for="link-type-desktop" class="cursor-pointer text-sm text-slate-700">{{ t('notifyPanel.linkTypes.desktop') }}</Label>
+              </div>
             </div>
           </div>
         </div>

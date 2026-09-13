@@ -11,6 +11,7 @@ export interface Task {
   personal_only: boolean;
   min_price: string | null;
   max_price: string | null;
+  price_drop_target?: string | null;
   cron: string | null;
   next_run_at?: string | null;
   ai_prompt_base_file: string;
@@ -64,6 +65,7 @@ export interface TaskGenerateRequest {
   personal_only?: boolean;
   min_price?: string | null;
   max_price?: string | null;
+  price_drop_target?: string | null;
   max_pages?: number;
   cron?: string | null;
   account_state_file?: string | null;

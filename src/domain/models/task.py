@@ -119,6 +119,7 @@ class Task(BaseModel):
     personal_only: bool
     min_price: Optional[str] = None
     max_price: Optional[str] = None
+    price_drop_target: Optional[str] = None
     cron: Optional[str] = None
     ai_prompt_base_file: str
     ai_prompt_criteria_file: str
@@ -169,6 +170,7 @@ class TaskCreate(BaseModel):
     personal_only: bool = True
     min_price: Optional[str] = None
     max_price: Optional[str] = None
+    price_drop_target: Optional[str] = None
     cron: Optional[str] = None
     ai_prompt_base_file: str = "prompts/base_prompt.txt"
     ai_prompt_criteria_file: str = ""
@@ -185,7 +187,7 @@ class TaskCreate(BaseModel):
     def normalize_legacy_keyword_payload(cls, values):
         return _normalize_payload_keywords(values)
 
-    @field_validator("min_price", "max_price", mode="before")
+    @field_validator("min_price", "max_price", "price_drop_target", mode="before")
     @classmethod
     def convert_price_to_str(cls, value):
         return _normalize_price_value(value)
@@ -236,6 +238,7 @@ class TaskUpdate(BaseModel):
     personal_only: Optional[bool] = None
     min_price: Optional[str] = None
     max_price: Optional[str] = None
+    price_drop_target: Optional[str] = None
     cron: Optional[str] = None
     ai_prompt_base_file: Optional[str] = None
     ai_prompt_criteria_file: Optional[str] = None
@@ -253,7 +256,7 @@ class TaskUpdate(BaseModel):
     def normalize_legacy_keyword_payload(cls, values):
         return _normalize_payload_keywords(values)
 
-    @field_validator("min_price", "max_price", mode="before")
+    @field_validator("min_price", "max_price", "price_drop_target", mode="before")
     @classmethod
     def convert_price_to_str(cls, value):
         return _normalize_price_value(value)
@@ -301,6 +304,7 @@ class TaskGenerateRequest(BaseModel):
     personal_only: bool = True
     min_price: Optional[str] = None
     max_price: Optional[str] = None
+    price_drop_target: Optional[str] = None
     max_pages: int = 3
     cron: Optional[str] = None
     account_state_file: Optional[str] = None
@@ -316,7 +320,7 @@ class TaskGenerateRequest(BaseModel):
     def normalize_legacy_keyword_payload(cls, values):
         return _normalize_payload_keywords(values)
 
-    @field_validator("min_price", "max_price", mode="before")
+    @field_validator("min_price", "max_price", "price_drop_target", mode="before")
     @classmethod
     def convert_price_to_str(cls, value):
         return _normalize_price_value(value)

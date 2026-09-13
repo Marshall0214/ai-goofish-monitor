@@ -13,6 +13,16 @@ from typing import Optional
 import os
 
 DEFAULT_TELEGRAM_API_BASE_URL = "https://api.telegram.org"
+DEFAULT_NOTIFICATION_LINK_TYPES = "mobile,desktop"
+VALID_NOTIFICATION_LINK_TYPES = {"mobile", "desktop"}
+
+
+def parse_notification_link_types(raw_value: str | None) -> set[str]:
+    """把逗号分隔的链接类型配置解析成合法的类型集合，非法/空值兜底为仅电脑端。"""
+    text = str(raw_value or "").strip().lower()
+    values = {item.strip() for item in text.split(",") if item.strip()}
+    valid_values = values & VALID_NOTIFICATION_LINK_TYPES
+    return valid_values or {"desktop"}
 
 
 def _env_field(default, env_name: str, **kwargs):
@@ -73,7 +83,13 @@ class NotificationSettings(_EnvSettings):
     webhook_content_type: str = _env_field("JSON", "WEBHOOK_CONTENT_TYPE")
     webhook_query_parameters: Optional[str] = _env_field(None, "WEBHOOK_QUERY_PARAMETERS")
     webhook_body: Optional[str] = _env_field(None, "WEBHOOK_BODY")
-    pcurl_to_mobile: bool = _env_field(True, "PCURL_TO_MOBILE")
+    notification_link_types: str = _env_field(
+        DEFAULT_NOTIFICATION_LINK_TYPES, "NOTIFICATION_LINK_TYPES"
+    )
+
+    def link_types_set(self) -> set[str]:
+        """解析出通知正文里应该展示的链接类型集合（mobile/desktop）。"""
+        return parse_notification_link_types(self.notification_link_types)
 
     def has_any_notification_enabled(self) -> bool:
         """检查是否配置了任何通知服务"""

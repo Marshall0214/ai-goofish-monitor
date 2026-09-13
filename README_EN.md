@@ -114,6 +114,7 @@ docker compose down
 - Supports AI creation, keyword rules, price range, new listing filters, region filters, account binding, and cron scheduling.
 - AI task creation runs as a background job and shows a dedicated progress dialog after submission.
 - Region filtering can greatly reduce results, so leaving it empty is the safer default.
+- `Price drop alert target`: optional; leave blank to disable price-drop monitoring. Once set, if a previously recommended item's price falls to or below this value during a later scrape, a price-drop notification is sent once (reusing the normal multi-channel notification config); it re-arms only after the price recovers above the target and drops again.
 
 ### Account Management
 
@@ -187,7 +188,6 @@ cd web-ui && npm run build
 - `RUN_HEADLESS`: whether the scraper runs headless; keep it `true` in Docker.
 - `SERVER_PORT`: backend port, default `8000`.
 - `LOGIN_IS_EDGE`: use Edge instead of Chrome locally; Docker images do not bundle Edge and always run with Chromium.
-- `PCURL_TO_MOBILE`: convert desktop item URLs to mobile URLs.
 
 ### Notifications
 
@@ -197,6 +197,7 @@ cd web-ui && npm run build
 - `WX_BOT_URL`
 - `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` / `TELEGRAM_API_BASE_URL`
 - `WEBHOOK_*`
+- `NOTIFICATION_LINK_TYPES`: which item link types to include in notification bodies, comma-separated: `mobile` / `desktop` / `mobile,desktop` (both by default). Shared by every notification channel and also configurable from the Web UI's notification settings; applies to both "new recommendation" notifications and the price-drop alerts described below.
 
 ### Proxy Rotation and Failure Guard
 

@@ -15,7 +15,7 @@ export interface NotificationSettings {
   WEBHOOK_CONTENT_TYPE?: string
   WEBHOOK_QUERY_PARAMETERS?: string
   WEBHOOK_BODY?: string
-  PCURL_TO_MOBILE?: boolean
+  NOTIFICATION_LINK_TYPES?: string[]
   BARK_URL_SET?: boolean
   GOTIFY_TOKEN_SET?: boolean
   WX_BOT_URL_SET?: boolean
@@ -40,7 +40,7 @@ export interface NotificationSettingsUpdate {
   WEBHOOK_CONTENT_TYPE?: string | null
   WEBHOOK_QUERY_PARAMETERS?: string | null
   WEBHOOK_BODY?: string | null
-  PCURL_TO_MOBILE?: boolean
+  NOTIFICATION_LINK_TYPES?: string[] | null
 }
 
 export interface NotificationTestResponse {

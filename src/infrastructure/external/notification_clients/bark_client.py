@@ -3,7 +3,7 @@ Bark 通知客户端
 """
 import asyncio
 import requests
-from typing import Dict
+from typing import Dict, Iterable
 from .base import NotificationClient
 
 
@@ -13,8 +13,8 @@ class BarkClient(NotificationClient):
     channel_key = "bark"
     display_name = "Bark"
 
-    def __init__(self, bark_url: str = None, pcurl_to_mobile: bool = True):
-        super().__init__(enabled=bool(bark_url), pcurl_to_mobile=pcurl_to_mobile)
+    def __init__(self, bark_url: str = None, link_types: Iterable[str] | None = None):
+        super().__init__(enabled=bool(bark_url), link_types=link_types)
         self.bark_url = bark_url
 
     async def send(self, product_data: Dict, reason: str) -> None:

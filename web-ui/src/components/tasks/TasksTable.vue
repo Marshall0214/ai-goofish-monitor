@@ -178,6 +178,9 @@ const emit = defineEmits<{
                   <MapPin class="mr-1 h-3 w-3" />
                   {{ task.region }}
                 </Badge>
+                <Badge v-if="task.price_drop_target" variant="outline" class="border-amber-200 bg-amber-50 text-amber-700">
+                  {{ t('tasks.table.priceDropTarget', { price: task.price_drop_target }) }}
+                </Badge>
               </div>
             </div>
 
@@ -396,6 +399,9 @@ const emit = defineEmits<{
                   </Badge>
                   <div v-if="task.region" class="flex items-center gap-0.5 text-[9px] font-bold text-slate-400 px-1.5 h-4 bg-slate-50/50 rounded border border-slate-100 truncate max-w-[80px]">
                     <MapPin class="w-2.5 h-2.5" /> {{ task.region }}
+                  </div>
+                  <div v-if="task.price_drop_target" class="flex items-center gap-0.5 text-[9px] font-bold text-amber-600 px-1.5 h-4 bg-amber-50/70 rounded border border-amber-100 truncate">
+                    {{ t('tasks.table.priceDropTarget', { price: task.price_drop_target }) }}
                   </div>
                 </div>
               </div>

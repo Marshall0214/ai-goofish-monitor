@@ -3,7 +3,7 @@ Ntfy 通知客户端
 """
 import asyncio
 import requests
-from typing import Dict
+from typing import Dict, Iterable
 from .base import NotificationClient
 
 
@@ -13,8 +13,8 @@ class NtfyClient(NotificationClient):
     channel_key = "ntfy"
     display_name = "Ntfy"
 
-    def __init__(self, topic_url: str = None, pcurl_to_mobile: bool = True):
-        super().__init__(enabled=bool(topic_url), pcurl_to_mobile=pcurl_to_mobile)
+    def __init__(self, topic_url: str = None, link_types: Iterable[str] | None = None):
+        super().__init__(enabled=bool(topic_url), link_types=link_types)
         self.topic_url = topic_url
 
     async def send(self, product_data: Dict, reason: str) -> None:

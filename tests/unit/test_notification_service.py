@@ -57,7 +57,7 @@ def test_webhook_client_renders_json_templates(monkeypatch):
         webhook_content_type="JSON",
         webhook_query_parameters='{"task":"{{title}}"}',
         webhook_body='{"message":"{{content}}","link":"{{desktop_link}}"}',
-        pcurl_to_mobile=False,
+        link_types={"desktop"},
     )
 
     asyncio.run(

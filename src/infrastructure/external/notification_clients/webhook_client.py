@@ -3,7 +3,7 @@
 """
 import asyncio
 import json
-from typing import Any, Dict
+from typing import Any, Dict, Iterable
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import requests
@@ -25,9 +25,9 @@ class WebhookClient(NotificationClient):
         webhook_content_type: str = "JSON",
         webhook_query_parameters: str | None = None,
         webhook_body: str | None = None,
-        pcurl_to_mobile: bool = True,
+        link_types: Iterable[str] | None = None,
     ):
-        super().__init__(enabled=bool(webhook_url), pcurl_to_mobile=pcurl_to_mobile)
+        super().__init__(enabled=bool(webhook_url), link_types=link_types)
         self.webhook_url = webhook_url
         self.webhook_method = (webhook_method or "POST").upper()
         self.webhook_headers = webhook_headers

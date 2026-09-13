@@ -2,7 +2,7 @@
 设置管理路由
 """
 import os
-from typing import Optional
+from typing import List, Optional
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException
@@ -86,7 +86,7 @@ class NotificationSettingsModel(BaseModel):
     WEBHOOK_CONTENT_TYPE: Optional[str] = None
     WEBHOOK_QUERY_PARAMETERS: Optional[str] = None
     WEBHOOK_BODY: Optional[str] = None
-    PCURL_TO_MOBILE: Optional[bool] = None
+    NOTIFICATION_LINK_TYPES: Optional[List[str]] = None
 
 
 class NotificationTestRequest(BaseModel):

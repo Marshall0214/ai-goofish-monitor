@@ -103,6 +103,7 @@ docker compose up -d
 - 支持 AI 创建、关键词规则、价格范围、新发布范围、区域筛选、账号绑定、定时规则。
 - AI 任务创建是后台 job 流程，提交后会打开单独的进度弹窗。
 - 区域筛选会显著缩小结果集，默认留空。
+- `降价提醒目标价`：可选字段，留空表示不监控降价。设置后，已推荐的商品在后续抓取中价格跌到该价格或以下时会额外发送一次降价通知（复用常规的多渠道通知配置），价格回升到目标价以上后再次跌破才会重新提醒。
 
 ### 账号管理
 
@@ -200,7 +201,6 @@ cd web-ui && npm run build
 - `RUN_HEADLESS`：是否以无头模式运行爬虫；Docker 中应保持 `true`。
 - `SERVER_PORT`：后端监听端口，默认 `8000`。
 - `LOGIN_IS_EDGE`：本地环境可切换为 Edge 内核；Docker 镜像未内置 Edge，容器内会固定使用 Chromium。
-- `PCURL_TO_MOBILE`：是否将 PC 商品链接转换为移动端链接。
 
 ### 通知
 
@@ -210,6 +210,7 @@ cd web-ui && npm run build
 - `WX_BOT_URL`
 - `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` / `TELEGRAM_API_BASE_URL`
 - `WEBHOOK_*`
+- `NOTIFICATION_LINK_TYPES`：通知正文中展示哪些商品链接类型，逗号分隔，可选 `mobile` / `desktop` / `mobile,desktop`（默认两者都展示）。所有通知渠道共用同一份配置，也可在 Web UI 的通知设置里勾选；同时控制"新品推荐"通知和下方的降价提醒通知。
 
 ### 代理轮换与失败保护
 

@@ -195,6 +195,84 @@ def _save_result_record_sync(record: dict, keyword: str) -> bool:
     return True
 
 
+def apply_price_drop_check(
+    keyword: str,
+    link_unique_key: str,
+    *,
+    current_price,
+    current_price_display,
+    target_price: float,
+) -> dict | None:
+    """顺路检测已跟踪商品的降价情况（在常规去重扫描时调用，不需要额外抓取）。
+
+    仅对已推荐（is_recommended=1）且当前可见（未被手动隐藏/过期、未命中屏蔽关键词）的商品生效。
+    使用 price_drop_alert_active 字段做迟滞：跌破目标价后只通知一次，直到价格回升到目标价以上，
+    再次跌破才会重新通知，避免每次运行都重复提醒。
+
+    始终会把该商品的最新价格写回 result_items（无论是否触发通知），因此列表页展示的价格会保持最新。
+    返回 None 表示本次无需发送通知；否则返回 {"item_data": ..., "reason": ...} 供调用方发送通知。
+    """
+    bootstrap_sqlite_storage()
+    filename = build_result_filename(keyword)
+    parsed_current_price = parse_price_value(current_price)
+    parsed_target_price = parse_price_value(target_price)
+
+    with sqlite_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT id, is_recommended, status, price_drop_alert_active, raw_json
+            FROM result_items
+            WHERE result_filename = ? AND link_unique_key = ?
+            """,
+            (filename, link_unique_key),
+        ).fetchone()
+        if row is None or not row["is_recommended"] or row["status"] != "active":
+            return None
+
+        try:
+            record = json.loads(row["raw_json"])
+        except json.JSONDecodeError:
+            record = {}
+
+        blacklist_keywords = _load_blacklist_keywords_from_conn(conn, filename)
+        if match_blacklist_keywords(record, blacklist_keywords):
+            return None
+
+        was_alert_active = bool(row["price_drop_alert_active"])
+        price_below_target = (
+            parsed_current_price is not None
+            and parsed_target_price is not None
+            and parsed_current_price <= parsed_target_price
+        )
+        should_notify = price_below_target and not was_alert_active
+
+        conn.execute(
+            """
+            UPDATE result_items
+            SET price = ?, price_display = ?, price_drop_alert_active = ?
+            WHERE id = ?
+            """,
+            (
+                parsed_current_price,
+                current_price_display,
+                1 if price_below_target else 0,
+                row["id"],
+            ),
+        )
+        conn.commit()
+
+        if not should_notify:
+            return None
+
+        item_data = dict(record.get("商品信息", {}) or {})
+        item_data["当前售价"] = current_price_display
+        reason = (
+            f"降价提醒：当前价格 {current_price_display}，"
+            f"已达到或低于您设置的目标价 ¥{parsed_target_price}。"
+        )
+        return {"item_data": item_data, "reason": reason}
+
+
 def load_processed_link_keys(keyword: str) -> set[str]:
     bootstrap_sqlite_storage()
     filename = build_result_filename(keyword)

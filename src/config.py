@@ -38,7 +38,7 @@ WEBHOOK_HEADERS = os.getenv("WEBHOOK_HEADERS")
 WEBHOOK_CONTENT_TYPE = os.getenv("WEBHOOK_CONTENT_TYPE", "JSON").upper()
 WEBHOOK_QUERY_PARAMETERS = os.getenv("WEBHOOK_QUERY_PARAMETERS")
 WEBHOOK_BODY = os.getenv("WEBHOOK_BODY")
-PCURL_TO_MOBILE = os.getenv("PCURL_TO_MOBILE", "false").lower() == "true"
+NOTIFICATION_LINK_TYPES = os.getenv("NOTIFICATION_LINK_TYPES", "mobile,desktop")
 RUN_HEADLESS = os.getenv("RUN_HEADLESS", "true").lower() != "false"
 LOGIN_IS_EDGE = os.getenv("LOGIN_IS_EDGE", "false").lower() == "true"
 RUNNING_IN_DOCKER = os.getenv("RUNNING_IN_DOCKER", "false").lower() == "true"

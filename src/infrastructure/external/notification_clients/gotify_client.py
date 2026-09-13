@@ -2,7 +2,7 @@
 Gotify 通知客户端
 """
 import asyncio
-from typing import Dict
+from typing import Dict, Iterable
 
 import requests
 
@@ -19,11 +19,11 @@ class GotifyClient(NotificationClient):
         self,
         gotify_url: str | None = None,
         gotify_token: str | None = None,
-        pcurl_to_mobile: bool = True,
+        link_types: Iterable[str] | None = None,
     ):
         super().__init__(
             enabled=bool(gotify_url and gotify_token),
-            pcurl_to_mobile=pcurl_to_mobile,
+            link_types=link_types,
         )
         self.gotify_url = (gotify_url or "").rstrip("/")
         self.gotify_token = gotify_token

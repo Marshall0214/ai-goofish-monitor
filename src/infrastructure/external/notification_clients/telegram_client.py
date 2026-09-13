@@ -2,7 +2,7 @@
 Telegram 通知客户端
 """
 import asyncio
-from typing import Dict
+from typing import Dict, Iterable
 
 import requests
 
@@ -22,9 +22,9 @@ class TelegramClient(NotificationClient):
         bot_token: str = None,
         chat_id: str = None,
         api_base_url: str = DEFAULT_TELEGRAM_API_BASE_URL,
-        pcurl_to_mobile: bool = True,
+        link_types: Iterable[str] | None = None,
     ):
-        super().__init__(enabled=bool(bot_token and chat_id), pcurl_to_mobile=pcurl_to_mobile)
+        super().__init__(enabled=bool(bot_token and chat_id), link_types=link_types)
         self.bot_token = bot_token
         self.chat_id = chat_id
         self.api_base_url = (
@@ -45,9 +45,16 @@ class TelegramClient(NotificationClient):
             f"💰 价格: {message.price}",
             f"📝 原因: {message.reason}",
         ]
+        link_line_added = False
         if message.mobile_link:
             telegram_message.append(f"📱 <a href='{message.mobile_link}'>手机端链接</a>")
-        telegram_message.append(f"💻 <a href='{message.desktop_link}'>电脑端链接</a>")
+            link_line_added = True
+        if "desktop" in self._link_types:
+            telegram_message.append(f"💻 <a href='{message.desktop_link}'>电脑端链接</a>")
+            link_line_added = True
+        if not link_line_added:
+            # 兜底：不管配置如何，通知里至少要有一个可用链接
+            telegram_message.append(f"🔗 <a href='{message.desktop_link}'>链接</a>")
 
         telegram_api_url = f"{self.api_base_url}/bot{self.bot_token}/sendMessage"
         telegram_payload = {

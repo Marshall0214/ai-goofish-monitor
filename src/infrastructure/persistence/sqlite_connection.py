@@ -33,6 +33,7 @@ SCHEMA_STATEMENTS = (
         personal_only INTEGER NOT NULL,
         min_price TEXT,
         max_price TEXT,
+        price_drop_target TEXT,
         cron TEXT,
         ai_prompt_base_file TEXT NOT NULL,
         ai_prompt_criteria_file TEXT NOT NULL,
@@ -65,6 +66,7 @@ SCHEMA_STATEMENTS = (
         analysis_source TEXT,
         keyword_hit_count INTEGER NOT NULL,
         status TEXT NOT NULL DEFAULT 'active',
+        price_drop_alert_active INTEGER NOT NULL DEFAULT 0,
         raw_json TEXT NOT NULL,
         UNIQUE(result_filename, link_unique_key)
     )
@@ -143,6 +145,8 @@ def init_schema(conn: sqlite3.Connection) -> None:
     for statement in SCHEMA_STATEMENTS:
         conn.execute(statement)
     _migrate_result_items_status(conn)
+    _migrate_tasks_price_drop_target(conn)
+    _migrate_result_items_price_drop(conn)
     conn.commit()
 
 
@@ -164,6 +168,38 @@ def _migrate_result_items_status(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_results_filename_status_crawl"
         " ON result_items(result_filename, status, crawl_time DESC)"
+    )
+
+
+def _migrate_tasks_price_drop_target(conn: sqlite3.Connection) -> None:
+    """为 tasks 表添加 price_drop_target 列（仅执行一次）。"""
+    row = conn.execute(
+        "SELECT value FROM app_metadata WHERE key = 'migration:tasks_price_drop_target'"
+    ).fetchone()
+    if row is not None:
+        return
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(tasks)").fetchall()]
+    if "price_drop_target" not in cols:
+        conn.execute("ALTER TABLE tasks ADD COLUMN price_drop_target TEXT")
+    conn.execute(
+        "INSERT OR REPLACE INTO app_metadata(key, value) VALUES ('migration:tasks_price_drop_target', 'done')"
+    )
+
+
+def _migrate_result_items_price_drop(conn: sqlite3.Connection) -> None:
+    """为 result_items 表添加 price_drop_alert_active 列（仅执行一次）。"""
+    row = conn.execute(
+        "SELECT value FROM app_metadata WHERE key = 'migration:result_items_price_drop'"
+    ).fetchone()
+    if row is not None:
+        return
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(result_items)").fetchall()]
+    if "price_drop_alert_active" not in cols:
+        conn.execute(
+            "ALTER TABLE result_items ADD COLUMN price_drop_alert_active INTEGER NOT NULL DEFAULT 0"
+        )
+    conn.execute(
+        "INSERT OR REPLACE INTO app_metadata(key, value) VALUES ('migration:result_items_price_drop', 'done')"
     )
 
 

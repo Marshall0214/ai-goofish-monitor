@@ -109,6 +109,35 @@ def test_generate_request_infers_fixed_account_strategy_from_state_file():
     assert req.account_strategy == "fixed"
 
 
+def test_task_create_normalizes_numeric_price_drop_target():
+    from src.domain.models.task import TaskCreate
+
+    task = TaskCreate(
+        task_name="Sony A7M4",
+        keyword="sony a7m4",
+        description="只看机身成色和卖家信用。",
+        price_drop_target=8888,
+    )
+    assert task.price_drop_target == "8888"
+
+
+def test_task_create_treats_empty_price_drop_target_as_none():
+    from src.domain.models.task import TaskCreate
+
+    task = TaskCreate(
+        task_name="Sony A7M4",
+        keyword="sony a7m4",
+        description="只看机身成色和卖家信用。",
+        price_drop_target="",
+    )
+    assert task.price_drop_target is None
+
+
+def test_task_update_accepts_price_drop_target():
+    update = TaskUpdate(price_drop_target="9000")
+    assert update.price_drop_target == "9000"
+
+
 def test_generate_request_requires_state_file_for_fixed_account_strategy():
     try:
         TaskGenerateRequest(

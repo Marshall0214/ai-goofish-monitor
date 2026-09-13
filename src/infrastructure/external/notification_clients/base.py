@@ -4,7 +4,7 @@
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Iterable
 
 from src.utils import convert_goofish_link
 
@@ -21,15 +21,22 @@ class NotificationMessage:
     image_url: str | None
 
 
+_DEFAULT_LINK_TYPES = frozenset({"mobile", "desktop"})
+
+
 class NotificationClient(ABC):
     """通知客户端抽象基类"""
 
     channel_key = "unknown"
     display_name = "未知渠道"
 
-    def __init__(self, enabled: bool = False, pcurl_to_mobile: bool = True):
+    def __init__(
+        self,
+        enabled: bool = False,
+        link_types: Iterable[str] | None = None,
+    ):
         self._enabled = enabled
-        self._pcurl_to_mobile = pcurl_to_mobile
+        self._link_types = frozenset(link_types) if link_types is not None else _DEFAULT_LINK_TYPES
 
     def is_enabled(self) -> bool:
         """检查客户端是否启用"""
@@ -54,20 +61,26 @@ class NotificationClient(ABC):
         title = product_data.get('商品标题', 'N/A')
         price = product_data.get('当前售价', 'N/A')
         desktop_link = product_data.get('商品链接', '#')
-        mobile_link = None
+        show_mobile = "mobile" in self._link_types
+        show_desktop = "desktop" in self._link_types
 
-        if self._pcurl_to_mobile and desktop_link and desktop_link != "#":
+        mobile_link = None
+        if show_mobile and desktop_link and desktop_link != "#":
             mobile_link = convert_goofish_link(desktop_link)
 
         content_lines = [
             f"价格: {price}",
             f"原因: {reason}",
         ]
+        link_lines = []
         if mobile_link:
-            content_lines.append(f"手机端链接: {mobile_link}")
-            content_lines.append(f"电脑端链接: {desktop_link}")
-        else:
-            content_lines.append(f"链接: {desktop_link}")
+            link_lines.append(f"手机端链接: {mobile_link}")
+        if show_desktop:
+            link_lines.append(f"电脑端链接: {desktop_link}")
+        if not link_lines:
+            # 兜底：不管配置如何，通知里至少要有一个可用链接
+            link_lines.append(f"链接: {desktop_link}")
+        content_lines.extend(link_lines)
 
         short_title = title[:30]
         suffix = "..." if len(title) > 30 else ""

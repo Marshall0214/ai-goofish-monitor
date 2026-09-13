@@ -53,9 +53,13 @@ from src.services.item_analysis_dispatcher import (
 from src.services.price_history_service import (
     build_market_reference,
     load_price_snapshots,
+    parse_price_value,
     record_market_snapshots,
 )
-from src.services.result_storage_service import load_processed_link_keys
+from src.services.result_storage_service import (
+    apply_price_drop_check,
+    load_processed_link_keys,
+)
 from src.services.seller_profile_cache import SellerProfileCache
 from src.services.search_pagination import (
     advance_search_page,
@@ -462,6 +466,7 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
     personal_only = task_config.get("personal_only", False)
     min_price = task_config.get("min_price")
     max_price = task_config.get("max_price")
+    price_drop_target = parse_price_value(task_config.get("price_drop_target"))
     ai_prompt_text = task_config.get("ai_prompt_text", "")
     analyze_images = _should_analyze_images(task_config)
     decision_mode = str(task_config.get("decision_mode", "ai")).strip().lower()
@@ -994,6 +999,26 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
                             log_time(
                                 f"[页内进度 {i}/{total_items_on_page}] 商品 '{item_data['商品标题'][:20]}...' 已存在，跳过。"
                             )
+                            if price_drop_target is not None:
+                                try:
+                                    price_drop_result = apply_price_drop_check(
+                                        keyword,
+                                        unique_key,
+                                        current_price=item_data.get("当前售价"),
+                                        current_price_display=item_data.get("当前售价"),
+                                        target_price=price_drop_target,
+                                    )
+                                except Exception as exc:
+                                    price_drop_result = None
+                                    log_time(f"降价检测失败: {exc}")
+                                if price_drop_result:
+                                    try:
+                                        await send_ntfy_notification(
+                                            price_drop_result["item_data"],
+                                            price_drop_result["reason"],
+                                        )
+                                    except Exception as exc:
+                                        log_time(f"发送降价通知失败: {exc}")
                             continue
 
                         log_time(

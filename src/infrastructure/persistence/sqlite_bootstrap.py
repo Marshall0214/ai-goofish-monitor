@@ -79,11 +79,11 @@ def _import_tasks_if_needed(conn, legacy_config_file: str | None) -> None:
             """
             INSERT INTO tasks (
                 id, task_name, enabled, keyword, description, analyze_images,
-                max_pages, personal_only, min_price, max_price, cron,
+                max_pages, personal_only, min_price, max_price, price_drop_target, cron,
                 ai_prompt_base_file, ai_prompt_criteria_file, account_state_file,
                 account_strategy, free_shipping, new_publish_option, region,
                 decision_mode, keyword_rules_json, is_running
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 index,
@@ -96,6 +96,7 @@ def _import_tasks_if_needed(conn, legacy_config_file: str | None) -> None:
                 _as_int(raw_task.get("personal_only", False)),
                 raw_task.get("min_price"),
                 raw_task.get("max_price"),
+                raw_task.get("price_drop_target"),
                 raw_task.get("cron"),
                 raw_task.get("ai_prompt_base_file", "prompts/base_prompt.txt"),
                 raw_task.get("ai_prompt_criteria_file", ""),

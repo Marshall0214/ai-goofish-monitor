@@ -128,6 +128,7 @@ watch(() => [props.mode, props.initialData, props.defaultValues, props.defaultAc
       personal_only: true,
       min_price: undefined,
       max_price: undefined,
+      price_drop_target: undefined,
       cron: '',
       account_strategy: props.defaultAccount ? 'fixed' : 'auto',
       account_state_file: props.defaultAccount || AUTO_ACCOUNT_VALUE,
@@ -325,6 +326,18 @@ function handleSubmit() {
           <Input type="number" v-model="form.min_price as any" :aria-label="t('tasks.form.minPrice')" :placeholder="t('tasks.form.minPrice')" />
           <span>-</span>
           <Input type="number" v-model="form.max_price as any" :aria-label="t('tasks.form.maxPrice')" :placeholder="t('tasks.form.maxPrice')" />
+        </div>
+      </div>
+      <div class="grid gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
+        <Label for="price-drop-target" class="sm:text-right">{{ t('tasks.form.priceDropTarget') }}</Label>
+        <div class="space-y-1 sm:col-span-3">
+          <Input
+            id="price-drop-target"
+            type="number"
+            v-model="form.price_drop_target as any"
+            :placeholder="t('tasks.form.priceDropTargetPlaceholder')"
+          />
+          <p class="text-xs text-gray-500">{{ t('tasks.form.priceDropTargetHint') }}</p>
         </div>
       </div>
       <div class="grid gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
