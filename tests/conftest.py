@@ -19,6 +19,7 @@ from src.api.routes import tasks
 from src.infrastructure.persistence.sqlite_task_repository import SqliteTaskRepository
 from src.services.task_service import TaskService
 from src.services.task_generation_service import TaskGenerationService
+from src.services.process_service import StartTaskResult
 
 
 @pytest.fixture()
@@ -61,16 +62,20 @@ class FakeProcessService:
         self.reindexed = []
         self._on_started = None
         self._on_stopped = None
+        # 测试可以覆盖这个属性，模拟"已在运行/失败保护暂停/子进程起不来"等场景，
+        # 而不用真的去起一个子进程。
+        self.next_start_result = StartTaskResult(success=True)
 
     def set_lifecycle_hooks(self, *, on_started=None, on_stopped=None):
         self._on_started = on_started
         self._on_stopped = on_stopped
 
-    async def start_task(self, task_id: int, task_name: str) -> bool:
+    async def start_task(self, task_id: int, task_name: str) -> StartTaskResult:
         self.started.append((task_id, task_name))
-        if self._on_started:
+        result = self.next_start_result
+        if result.success and self._on_started:
             await self._on_started(task_id)
-        return True
+        return result
 
     async def stop_task(self, task_id: int):
         self.stopped.append(task_id)

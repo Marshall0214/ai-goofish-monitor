@@ -59,6 +59,7 @@ from src.services.price_history_service import (
 from src.services.result_storage_service import (
     apply_price_drop_check,
     load_processed_link_keys,
+    load_result_blacklist_keywords,
 )
 from src.services.seller_profile_cache import SellerProfileCache
 from src.services.search_pagination import (
@@ -609,9 +610,13 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
             seller_profile_cache = SellerProfileCache(
                 ttl_seconds=_get_seller_profile_cache_ttl(task_config)
             )
+            # 预取本任务的黑名单规则：命中标题的商品仍会正常入库，只是跳过（较贵的）AI 调用，
+            # 避免因为纯字符串匹配可能的误伤（比如否定前缀）而彻底漏掉商品、无法事后复核。
+            blacklist_keywords = tuple(await load_result_blacklist_keywords(result_filename))
             analysis_dispatcher = ItemAnalysisDispatcher(
                 concurrency=_get_ai_analysis_concurrency(task_config),
                 skip_ai_analysis=SKIP_AI_ANALYSIS,
+                blacklist_keywords=blacklist_keywords,
                 seller_loader=lambda user_id: seller_profile_cache.get_or_load(
                     str(user_id),
                     lambda seller_key: scrape_user_profile(context, seller_key),

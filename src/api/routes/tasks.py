@@ -263,9 +263,13 @@ async def start_task(
         raise HTTPException(status_code=400, detail="任务已被禁用，无法启动")
     if task.is_running:
         raise HTTPException(status_code=400, detail="任务已在运行中")
-    success = await process_service.start_task(task_id, task.task_name)
-    if not success:
-        raise HTTPException(status_code=500, detail="启动任务失败")
+    result = await process_service.start_task(task_id, task.task_name)
+    if not result.success:
+        # 只有子进程真起不来才算服务端错误(500)；已在运行/失败保护暂停中
+        # 都是可预期的业务状态冲突，用 409 并带上具体原因，别再统统甩一个
+        # 语焉不详的"启动任务失败"。
+        status_code = 500 if result.error_code == "spawn_failed" else 409
+        raise HTTPException(status_code=status_code, detail=result.message or "启动任务失败")
     return {"message": f"任务 '{task.task_name}' 已启动"}
 @router.post("/stop/{task_id}", response_model=dict)
 async def stop_task(

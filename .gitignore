@@ -16,3 +16,6 @@ prompts/
 price_history/
 data/
 debug.log
+ai-goofish-monitor-简历素材.md
+.pytest_tmp
+Claude outputs/

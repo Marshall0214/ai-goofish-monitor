@@ -51,4 +51,16 @@ def test_save_to_jsonl(tmp_path, monkeypatch):
             sort_order="asc",
         )
     )
-    assert records == [record]
+    assert len(records) == 1
+    result = records[0]
+
+    # 查询时会附加展示用的装饰字段（可见性/黑名单命中情况），不是原始存入的数据，
+    # 单独断言这些字段的默认值，而不是要求跟存入的 record 完全相等。
+    assert result["_status"] == "active"
+    assert result["_matched_blacklist_keywords"] == []
+    assert result["_hidden_reason"] is None
+    assert result["_effective_hidden"] is False
+
+    # 原始存入的字段应该原样保留。
+    for key, value in record.items():
+        assert result[key] == value

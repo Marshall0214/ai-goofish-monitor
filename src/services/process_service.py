@@ -8,8 +8,9 @@ import contextlib
 import os
 import signal
 import sys
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Awaitable, Callable, Dict, TextIO
+from typing import Awaitable, Callable, Dict, Optional, TextIO
 
 from src.ai_handler import send_ntfy_notification
 from src.config import STATE_FILE
@@ -20,6 +21,25 @@ from src.utils import build_task_log_path
 STOP_TIMEOUT_SECONDS = 20
 SPIDER_DEBUG_LIMIT_ENV = "SPIDER_DEBUG_LIMIT"
 LifecycleHook = Callable[[int], Awaitable[None] | None]
+
+
+@dataclass(frozen=True)
+class StartTaskResult:
+    """启动任务的结果。success=False 时 error_code 区分具体原因，
+    供调用方（API 路由）映射成合适的 HTTP 状态码和提示文案，
+    而不是把"已在运行""失败保护暂停中""子进程起不来"这三种完全不同的情况
+    全部折叠成一个含糊的"启动任务失败"。
+
+    error_code 取值：
+    - "already_running"：任务已经在跑，无需/无法重复启动。
+    - "failure_guard_paused"：命中失败保护熔断，当前处于暂停期。
+    - "spawn_failed"：真正的子进程启动异常。
+    """
+
+    success: bool
+    error_code: Optional[str] = None
+    message: str = ""
+    paused_until: Optional[datetime] = None
 
 
 class ProcessService:
@@ -130,12 +150,16 @@ class ProcessService:
         self.task_names[task_id] = task_name
         self.exit_watchers[task_id] = asyncio.create_task(self._watch_process_exit(process))
 
-    async def start_task(self, task_id: int, task_name: str) -> bool:
+    async def start_task(self, task_id: int, task_name: str) -> StartTaskResult:
         """启动任务进程"""
         await self._drain_finished_process(task_id)
         if self.is_running(task_id):
             print(f"任务 '{task_name}' (ID: {task_id}) 已在运行中")
-            return False
+            return StartTaskResult(
+                success=False,
+                error_code="already_running",
+                message=f"任务 '{task_name}' 已在运行中",
+            )
 
         decision = self.failure_guard.should_skip_start(
             task_name,
@@ -143,7 +167,22 @@ class ProcessService:
         )
         if decision.skip:
             await self._notify_skip(task_name, decision)
-            return False
+            paused_until_text = (
+                decision.paused_until.strftime("%Y-%m-%d %H:%M:%S")
+                if decision.paused_until
+                else "未知时间"
+            )
+            return StartTaskResult(
+                success=False,
+                error_code="failure_guard_paused",
+                message=(
+                    f"任务处于失败保护暂停中（连续失败 "
+                    f"{decision.consecutive_failures}/{self.failure_guard.threshold}，"
+                    f"原因：{decision.reason}），预计 {paused_until_text} 后自动恢复；"
+                    "更新登录态/cookies 文件后也会自动提前解除。"
+                ),
+                paused_until=decision.paused_until,
+            )
 
         log_file_path = ""
         log_file_handle = None
@@ -153,12 +192,16 @@ class ProcessService:
         except Exception as exc:
             self._close_log_handle(log_file_handle)
             print(f"启动任务 '{task_name}' 失败: {exc}")
-            return False
+            return StartTaskResult(
+                success=False,
+                error_code="spawn_failed",
+                message=f"启动任务子进程失败：{exc}",
+            )
 
         self._register_runtime(task_id, task_name, process, log_file_path, log_file_handle)
         print(f"启动任务 '{task_name}' (PID: {process.pid})")
         await self._invoke_hook(self._on_started, task_id)
-        return True
+        return StartTaskResult(success=True)
 
     async def _notify_skip(self, task_name: str, decision) -> None:
         print(

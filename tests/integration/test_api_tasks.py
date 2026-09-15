@@ -1,6 +1,8 @@
 import asyncio
 import time
 
+from src.services.process_service import StartTaskResult
+
 
 def test_create_list_update_delete_task(api_client, api_context, sample_task_payload):
     response = api_client.post("/api/tasks/", json=sample_task_payload)
@@ -54,6 +56,48 @@ def test_start_stop_task_updates_status(api_client, api_context, sample_task_pay
     process_service = api_context["process_service"]
     assert process_service.started == [(0, sample_task_payload["task_name"])]
     assert process_service.stopped == [0]
+
+
+def test_start_task_reports_failure_guard_pause_as_409_with_reason(
+    api_client, api_context, sample_task_payload
+):
+    """命中失败保护暂停时，不应该是语焉不详的 500，而是带具体原因的 409。"""
+    response = api_client.post("/api/tasks/", json=sample_task_payload)
+    assert response.status_code == 200
+
+    paused_until = "2026-09-16T02:00:32+08:00"
+    api_context["process_service"].next_start_result = StartTaskResult(
+        success=False,
+        error_code="failure_guard_paused",
+        message=(
+            "任务处于失败保护暂停中（连续失败 3/3，原因：ERR_CONNECTION_RESET），"
+            "预计 2026-09-16 02:00:32 后自动恢复。"
+        ),
+        paused_until=paused_until,
+    )
+
+    response = api_client.post("/api/tasks/start/0")
+    assert response.status_code == 409
+    assert "失败保护暂停" in response.json()["detail"]
+    assert "ERR_CONNECTION_RESET" in response.json()["detail"]
+
+
+def test_start_task_reports_spawn_failure_as_500_with_reason(
+    api_client, api_context, sample_task_payload
+):
+    """真正的子进程启动异常仍然是 500，但要带上具体原因，而不是通用文案。"""
+    response = api_client.post("/api/tasks/", json=sample_task_payload)
+    assert response.status_code == 200
+
+    api_context["process_service"].next_start_result = StartTaskResult(
+        success=False,
+        error_code="spawn_failed",
+        message="启动任务子进程失败：[Errno 2] No such file or directory",
+    )
+
+    response = api_client.post("/api/tasks/start/0")
+    assert response.status_code == 500
+    assert "No such file or directory" in response.json()["detail"]
 
 
 def test_generate_keyword_mode_task_without_ai_criteria(api_client):

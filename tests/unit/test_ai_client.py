@@ -275,8 +275,14 @@ def test_sanitize_no_proxy_noop_without_env(monkeypatch):
 
 
 def test_sanitize_no_proxy_handles_both_keys(monkeypatch):
+    # 特意用同一个值设置两种大小写写法：Windows 的环境变量名不区分大小写，
+    # NO_PROXY 和 no_proxy 在系统层面其实是同一个变量，后 setenv 的会直接覆盖
+    # 前一个——用两个不同的值分别设置在 Windows 上根本测不出"两个 key 都被
+    # 清理"，只会测出"最后设置的那个生效了"。用相同的值可以在 Windows 和
+    # Linux/Mac 上都有效验证：无论 os.environ 里同时出现这两个 key 时是否
+    # 共享底层存储，两个 key 读出来都应该是清理后的结果。
     monkeypatch.setenv("NO_PROXY", "::1/128")
-    monkeypatch.setenv("no_proxy", "fe80::1/10")
+    monkeypatch.setenv("no_proxy", "::1/128")
     _sanitize_no_proxy_env()
     assert os.environ["NO_PROXY"] == "::1"
-    assert os.environ["no_proxy"] == "fe80::1"
+    assert os.environ["no_proxy"] == "::1"

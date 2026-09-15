@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable, Optional
 
 from src.keyword_rule_engine import build_search_text, evaluate_keyword_rules
+from src.services.result_blacklist_service import match_blacklist_keywords
 
 
 SellerLoader = Callable[[str], Awaitable[dict]]
@@ -33,7 +34,15 @@ class ItemAnalysisJob:
 
 
 class ItemAnalysisDispatcher:
-    """用受控并发处理商品分析和落盘。"""
+    """用受控并发处理商品分析和落盘。
+
+    黑名单预过滤（blacklist_keywords）：当商品标题命中黑名单时，跳过（较贵的）AI 分析
+    调用，但仍然正常入库——不是"抓到就丢弃"。这是有意的取舍：黑名单是纯字符串/正则匹配，
+    对中文否定前缀（"未维修""无维修记录"这类）这种语义没有识别能力，不可能保证零误伤；
+    如果连入库都跳过，一旦误伤，商品从未被保存过，用户根本不会知道、也没法事后复核。
+    保留入库 + 复用既有的"显示已屏蔽结果"能力，误伤仍然可见、可追溯、可通过调整黑名单规则
+    恢复，只是省下了这一条本来要花钱调用的 AI 请求。
+    """
 
     def __init__(
         self,
@@ -45,6 +54,7 @@ class ItemAnalysisDispatcher:
         ai_analyzer: AIAnalyzer,
         notifier: Notifier,
         saver: Saver,
+        blacklist_keywords: tuple[str, ...] = (),
     ) -> None:
         self._semaphore = asyncio.Semaphore(max(1, concurrency))
         self._skip_ai_analysis = skip_ai_analysis
@@ -53,8 +63,10 @@ class ItemAnalysisDispatcher:
         self._ai_analyzer = ai_analyzer
         self._notifier = notifier
         self._saver = saver
+        self._blacklist_keywords = tuple(blacklist_keywords or ())
         self._tasks: set[asyncio.Task] = set()
         self.completed_count = 0
+        self.blacklist_prefiltered_count = 0
 
     def submit(self, job: ItemAnalysisJob) -> None:
         task = asyncio.create_task(self._process_with_limit(job))
@@ -95,7 +107,16 @@ class ItemAnalysisDispatcher:
             return self._build_keyword_result(job, record)
         if self._skip_ai_analysis:
             return self._build_skip_ai_result()
+        blacklist_hit = self._match_blacklist_title(record)
+        if blacklist_hit:
+            self.blacklist_prefiltered_count += 1
+            return self._build_blacklist_prefilter_result(blacklist_hit)
         return await self._run_ai_analysis(job, record)
+
+    def _match_blacklist_title(self, record: dict) -> list[str]:
+        if not self._blacklist_keywords:
+            return []
+        return match_blacklist_keywords(record, self._blacklist_keywords)
 
     def _build_keyword_result(self, job: ItemAnalysisJob, record: dict) -> dict:
         search_text = build_search_text(record)
@@ -107,6 +128,19 @@ class ItemAnalysisDispatcher:
             "is_recommended": True,
             "reason": "商品已跳过AI分析，直接通知",
             "keyword_hit_count": 0,
+        }
+
+    def _build_blacklist_prefilter_result(self, matched_keywords: list[str]) -> dict:
+        return {
+            "analysis_source": "ai",
+            "is_recommended": False,
+            "reason": (
+                f"标题命中黑名单关键词（{'、'.join(matched_keywords)}），"
+                "已跳过 AI 分析以节省调用成本；商品仍正常入库，可在结果页开启"
+                "“显示已屏蔽结果”查看并按需调整黑名单规则。"
+            ),
+            "keyword_hit_count": 0,
+            "blacklist_prefiltered": True,
         }
 
     def _build_ai_error_result(self, reason: str, *, error: str = "") -> dict:

@@ -1,12 +1,22 @@
 """
 结果黑名单规则解析与匹配。
+
+注意：黑名单只匹配商品自身的展示文本（目前是商品标题），不匹配卖家信息、
+商品标签、发货地区等元数据字段。这是有意的收窄——黑名单描述的是"这件商品
+长什么样"，而不是"卖家资料/元数据里恰好出现了这个词"。如果匹配范围扩大到
+全部字段，一个很常见的关键词（比如两三个字的中文词）很容易在无关字段里
+误命中，把本该展示的商品也一起屏蔽掉。
+
+这里特意不复用 keyword_rule_engine.build_search_text ——那个函数是给"关键词
+规则引擎"（判断要不要推荐商品）用的，语义上就是要广撒网匹配尽量多字段；黑名单
+的语义相反，要精确、收窄，避免误伤，所以单独维护一份只取标题的文本构建逻辑。
 """
 from __future__ import annotations
 
 import re
 from typing import Any, Iterable
 
-from src.keyword_rule_engine import build_search_text, normalize_text
+from src.keyword_rule_engine import normalize_text
 
 
 _ASCII_TOKEN_KEYWORD_PATTERN = re.compile(r"^[a-z0-9 ]+$")
@@ -64,12 +74,19 @@ def _keyword_matches(keyword: str, normalized_text: str) -> bool:
     return re.search(pattern, normalized_text) is not None
 
 
+def _build_blacklist_search_text(record: dict[str, Any]) -> str:
+    """只取商品标题作为黑名单匹配文本，不囊括卖家信息、标签、地区等元数据。"""
+    product_info = record.get("商品信息") or {}
+    title = product_info.get("商品标题") or ""
+    return str(title)
+
+
 def match_blacklist_keywords(record: dict[str, Any], keywords: Iterable[str] | str | None) -> list[str]:
     normalized_keywords = normalize_blacklist_keywords(keywords)
     if not normalized_keywords:
         return []
 
-    search_text = normalize_text(build_search_text(record))
+    search_text = normalize_text(_build_blacklist_search_text(record))
     if not search_text:
         return []
 

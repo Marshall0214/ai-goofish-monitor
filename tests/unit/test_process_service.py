@@ -1,5 +1,6 @@
 import asyncio
 import sys
+from datetime import datetime
 from types import SimpleNamespace
 
 from src.services.process_service import ProcessService
@@ -61,7 +62,7 @@ def test_process_service_marks_task_stopped_when_process_exits(monkeypatch, tmp_
         monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
 
         started = await service.start_task(0, "task-a")
-        assert started is True
+        assert started.success is True
         assert events == [("started", 0)]
         assert service.is_running(0) is True
 
@@ -70,6 +71,86 @@ def test_process_service_marks_task_stopped_when_process_exits(monkeypatch, tmp_
 
         assert ("stopped", 0) in events
         assert service.is_running(0) is False
+
+    asyncio.run(run_scenario())
+
+
+def test_process_service_start_task_reports_already_running(monkeypatch, tmp_path):
+    async def run_scenario():
+        service = ProcessService()
+        service.failure_guard.should_skip_start = lambda *args, **kwargs: SimpleNamespace(
+            skip=False,
+            should_notify=False,
+            reason="",
+            consecutive_failures=0,
+            paused_until=None,
+        )
+        monkeypatch.setattr(
+            "src.services.process_service.build_task_log_path",
+            lambda task_id, _task_name: str(tmp_path / f"task-{task_id}.log"),
+        )
+
+        async def fake_create_subprocess_exec(*_args, **_kwargs):
+            return FakeProcess(pid=1)
+
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+
+        first = await service.start_task(0, "task-a")
+        assert first.success is True
+
+        second = await service.start_task(0, "task-a")
+        assert second.success is False
+        assert second.error_code == "already_running"
+
+    asyncio.run(run_scenario())
+
+
+def test_process_service_start_task_reports_failure_guard_pause():
+    async def run_scenario():
+        service = ProcessService()
+        paused_until = datetime(2026, 9, 16, 2, 0, 32)
+        service.failure_guard.should_skip_start = lambda *args, **kwargs: SimpleNamespace(
+            skip=True,
+            should_notify=False,
+            reason="Error: Page.goto: net::ERR_CONNECTION_RESET",
+            consecutive_failures=3,
+            paused_until=paused_until,
+        )
+
+        result = await service.start_task(0, "pokemongoplus+")
+        assert result.success is False
+        assert result.error_code == "failure_guard_paused"
+        assert result.paused_until == paused_until
+        assert "ERR_CONNECTION_RESET" in result.message
+        assert "2026-09-16 02:00:32" in result.message
+
+    asyncio.run(run_scenario())
+
+
+def test_process_service_start_task_reports_spawn_failure(monkeypatch, tmp_path):
+    async def run_scenario():
+        service = ProcessService()
+        service.failure_guard.should_skip_start = lambda *args, **kwargs: SimpleNamespace(
+            skip=False,
+            should_notify=False,
+            reason="",
+            consecutive_failures=0,
+            paused_until=None,
+        )
+        monkeypatch.setattr(
+            "src.services.process_service.build_task_log_path",
+            lambda task_id, _task_name: str(tmp_path / f"task-{task_id}.log"),
+        )
+
+        async def fake_create_subprocess_exec(*_args, **_kwargs):
+            raise OSError("spawn failed: no such file")
+
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+
+        result = await service.start_task(0, "task-a")
+        assert result.success is False
+        assert result.error_code == "spawn_failed"
+        assert "spawn failed" in result.message
 
     asyncio.run(run_scenario())
 
