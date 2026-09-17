@@ -81,6 +81,7 @@ def test_call_ai_retries_without_structured_output_when_model_rejects_it():
         model_name="fake-model",
         enable_response_format=True,
         enable_thinking=False,
+        max_output_tokens=4000,
     )
     request_history = []
 
@@ -111,12 +112,61 @@ def test_call_ai_retries_without_structured_output_when_model_rejects_it():
     assert "response_format" not in request_history[1]
 
 
+def test_call_ai_uses_configured_default_max_output_tokens_when_not_specified():
+    client = AIClient.__new__(AIClient)
+    client.settings = SimpleNamespace(
+        model_name="fake-model",
+        enable_response_format=True,
+        enable_thinking=False,
+        max_output_tokens=9999,
+    )
+    request_history = []
+
+    async def fake_create(**kwargs):
+        request_history.append(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content='{"ok":true}'))]
+        )
+
+    client.client = _build_fake_client(fake_create)
+
+    asyncio.run(client._call_ai([{"role": "user", "content": "hi"}]))
+
+    assert request_history[0]["max_tokens"] == 9999
+
+
+def test_call_ai_respects_explicit_max_output_tokens_override():
+    client = AIClient.__new__(AIClient)
+    client.settings = SimpleNamespace(
+        model_name="fake-model",
+        enable_response_format=True,
+        enable_thinking=False,
+        max_output_tokens=9999,
+    )
+    request_history = []
+
+    async def fake_create(**kwargs):
+        request_history.append(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content='{"ok":true}'))]
+        )
+
+    client.client = _build_fake_client(fake_create)
+
+    asyncio.run(
+        client._call_ai([{"role": "user", "content": "hi"}], max_output_tokens=42)
+    )
+
+    assert request_history[0]["max_tokens"] == 42
+
+
 def test_call_ai_falls_back_to_responses_when_chat_completions_api_is_missing():
     client = AIClient.__new__(AIClient)
     client.settings = SimpleNamespace(
         model_name="fake-model",
         enable_response_format=True,
         enable_thinking=False,
+        max_output_tokens=4000,
     )
     request_history = []
 
@@ -153,6 +203,7 @@ def test_call_ai_retries_without_temperature_when_gateway_rejects_it():
         model_name="fake-model",
         enable_response_format=False,
         enable_thinking=False,
+        max_output_tokens=4000,
     )
     request_history = []
 
@@ -183,6 +234,7 @@ def test_call_ai_retries_when_response_content_is_empty():
         model_name="fake-model",
         enable_response_format=False,
         enable_thinking=False,
+        max_output_tokens=4000,
     )
     request_history = []
 
@@ -206,6 +258,7 @@ def test_call_ai_raises_after_all_empty_response_retries_are_exhausted():
         model_name="fake-model",
         enable_response_format=False,
         enable_thinking=False,
+        max_output_tokens=4000,
     )
     request_history = []
 

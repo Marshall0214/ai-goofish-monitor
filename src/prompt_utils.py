@@ -61,7 +61,10 @@ async def _request_generated_text(ai_client: AIClient, prompt: str) -> str:
         generated_text = await ai_client._call_ai(
             [{"role": "user", "content": prompt}],
             temperature=0.5,
-            max_output_tokens=800,
+            # 参考范例（macbook_criteria.txt）本身有数千字节，800 token 的旧上限
+            # 经常在生成完整文档前就把输出截断（这正是本次污染 prompts/宝可梦
+            # goplus_criteria.txt 的直接原因之一）。给足够余量避免重蹈覆辙。
+            max_output_tokens=3000,
             enable_json_output=False,
         )
     except Exception as exc:

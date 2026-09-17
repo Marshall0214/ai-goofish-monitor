@@ -1,0 +1,3 @@
+item_id,task_name,title,price_display,current_ai_verdict,analysis_source,status,link,expected_recommend,note
+'123456789012,MacBook,示例：95新 MacBook Pro M2 14寸,¥9999,推荐,keyword,active,https://www.goofish.com/item?id=123456789012,true,示例行——关键词推荐但人工判断值得买
+'987654321098,MacBook,示例：疑似职业商家伪装个人卖家,¥6999,推荐,ai,expired,https://www.goofish.com/item?id=987654321098,false,示例行——已下架不代表当初判断有误，仍按商品本身判断

@@ -154,13 +154,28 @@ class ItemAnalysisDispatcher:
             payload["error"] = error
         return payload
 
+    # 这两个字段只用来支撑"降价提醒"和结果页展示，不再传给 AI——原因见
+    # ai_message_builder.py 顶部注释：price_insight/价格参考是被任务自己的
+    # min_price/max_price 截断过的市场统计，本身就不准，之前还会诱导模型把
+    # "性价比"和"是否推荐"混为一谈，导致大量本该推荐的商品被误判。这两个字段
+    # 依然会正常写入数据库/展示给用户，只是不再出现在发给 AI 的那份 JSON 里。
+    _AI_EXCLUDED_RECORD_KEYS = ("价格参考", "price_insight")
+
+    def _build_ai_facing_record(self, record: dict) -> dict:
+        return {
+            key: value
+            for key, value in record.items()
+            if key not in self._AI_EXCLUDED_RECORD_KEYS
+        }
+
     async def _run_ai_analysis(self, job: ItemAnalysisJob, record: dict) -> dict:
         image_paths: list[str] = []
         try:
             image_paths = await self._download_images(job, record)
             if not job.prompt_text:
                 return self._build_ai_error_result("任务未配置AI prompt，跳过分析。")
-            ai_result = await self._ai_analyzer(record, image_paths, job.prompt_text)
+            ai_facing_record = self._build_ai_facing_record(record)
+            ai_result = await self._ai_analyzer(ai_facing_record, image_paths, job.prompt_text)
             if not ai_result:
                 return self._build_ai_error_result(
                     "AI analysis returned None after retries.",

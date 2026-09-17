@@ -19,3 +19,6 @@ debug.log
 ai-goofish-monitor-简历素材.md
 .pytest_tmp
 Claude outputs/
+eval/labels.csv
+eval/report.json
+eval/report.md

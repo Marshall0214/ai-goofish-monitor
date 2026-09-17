@@ -46,9 +46,14 @@ class AIAnalysisService:
             return None
 
     def _validate_result(self, result: Dict) -> bool:
-        """验证 AI 分析结果的格式"""
+        """验证 AI 分析结果的格式。
+
+        prompt_version 故意不作为必需字段——它只是 prompt 模板里的装饰性版本号，
+        代码里没有任何地方真正读取它，硬性要求它只会导致模型没有回显这个无意义
+        字段时，一份内容完全正常的分析结果被整体判定失败（详见 src/ai_handler.py
+        里 validate_ai_response_format 的同款说明，两处是同一个校验逻辑的重复实现）。
+        """
         required_fields = [
-            "prompt_version",
             "is_recommended",
             "reason",
             "risk_tags",

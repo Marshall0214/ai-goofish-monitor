@@ -284,6 +284,34 @@ def load_processed_link_keys(keyword: str) -> set[str]:
     return {str(row["link_unique_key"]) for row in rows if row["link_unique_key"]}
 
 
+async def find_result_records_by_item_id(item_id: str) -> list[dict]:
+    """按商品ID查询已入库的原始结果记录（可能因不同任务/关键词重复入库，返回全部命中）。
+
+    主要供离线脚本（例如 AI 分析效果评测）按 ID 取回当时保存的完整
+    商品信息/卖家信息原始 JSON，不做黑名单/可见性装饰。
+    """
+    return await asyncio.to_thread(_find_result_records_by_item_id_sync, item_id)
+
+
+def _find_result_records_by_item_id_sync(item_id: str) -> list[dict]:
+    bootstrap_sqlite_storage()
+    with sqlite_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT raw_json, status, task_name, result_filename
+            FROM result_items
+            WHERE item_id = ?
+            ORDER BY id DESC
+            """,
+            (str(item_id),),
+        ).fetchall()
+    records = []
+    for row in rows:
+        record = _parse_raw_record(str(row["raw_json"]), status=row["status"])
+        record.setdefault("任务名称", row["task_name"])
+        records.append(record)
+    return records
+
 async def list_result_filenames() -> list[str]:
     return await asyncio.to_thread(_list_result_filenames_sync)
 

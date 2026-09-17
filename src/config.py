@@ -47,6 +47,16 @@ SKIP_AI_ANALYSIS = os.getenv("SKIP_AI_ANALYSIS", "false").lower() == "true"
 ENABLE_THINKING = os.getenv("ENABLE_THINKING", "false").lower() == "true"
 ENABLE_RESPONSE_FORMAT = os.getenv("ENABLE_RESPONSE_FORMAT", "true").lower() == "true"
 
+# AI 单次响应的最大输出 token 数。详细的卖家画像分析（criteria_analysis 里的
+# temporal_analysis/selling_behavior/buying_behavior 等子字段）内容较长，
+# 默认值过小会导致模型输出在 JSON 写完之前被截断，进而引发"JSON解析失败"
+# 或更隐蔽的"响应缺少必需字段"（截断后的残片里某个嵌套对象恰好能被误当作
+# 顶层响应解析出来）。默认给到 8000，必要时可通过 .env 调整。
+try:
+    AI_MAX_OUTPUT_TOKENS = int(os.getenv("AI_MAX_OUTPUT_TOKENS", "8000"))
+except ValueError:
+    AI_MAX_OUTPUT_TOKENS = 8000
+
 # --- Headers ---
 IMAGE_DOWNLOAD_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:139.0) Gecko/20100101 Firefox/139.0',

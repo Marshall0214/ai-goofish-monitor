@@ -58,6 +58,7 @@ class AISettings(_EnvSettings):
     enable_response_format: bool = _env_field(True, "ENABLE_RESPONSE_FORMAT")
     enable_thinking: bool = _env_field(False, "ENABLE_THINKING")
     skip_analysis: bool = _env_field(False, "SKIP_AI_ANALYSIS")
+    max_output_tokens: int = _env_field(8000, "AI_MAX_OUTPUT_TOKENS")
 
     def is_configured(self) -> bool:
         """检查AI是否已正确配置"""

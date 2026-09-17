@@ -78,6 +78,79 @@ def test_item_analysis_dispatcher_uses_bounded_concurrency():
     assert saved_records[0][1]["卖家信息"]["卖家ID"].startswith("seller-")
 
 
+def test_item_analysis_dispatcher_excludes_price_reference_from_ai_but_keeps_it_in_storage():
+    """价格参考/price_insight 是被任务自己的 min_price/max_price 截断过的市场统计，
+    本身不准，还会诱导模型把"性价比"和"是否推荐"混为一谈（真实评测中 13/14 个
+    误判都是这个模式）。这两个字段应该继续写入数据库/展示给用户，但不能出现在
+    发给 AI 的那份 record 里。
+    """
+    saved_records = []
+    ai_facing_records = []
+
+    async def seller_loader(user_id: str):
+        return {}
+
+    async def image_downloader(product_id: str, image_urls: list[str], task_name: str):
+        return []
+
+    async def ai_analyzer(record: dict, image_paths: list[str], prompt_text: str):
+        ai_facing_records.append(record)
+        return {
+            "analysis_source": "ai",
+            "is_recommended": True,
+            "reason": "推荐",
+            "keyword_hit_count": 0,
+        }
+
+    async def notifier(item_data: dict, reason: str):
+        return None
+
+    async def saver(record: dict, keyword: str):
+        saved_records.append(record)
+        return True
+
+    async def run():
+        dispatcher = ItemAnalysisDispatcher(
+            concurrency=1,
+            skip_ai_analysis=False,
+            seller_loader=seller_loader,
+            image_downloader=image_downloader,
+            ai_analyzer=ai_analyzer,
+            notifier=notifier,
+            saver=saver,
+        )
+        dispatcher.submit(
+            ItemAnalysisJob(
+                keyword="demo",
+                task_name="Demo",
+                decision_mode="ai",
+                analyze_images=False,
+                prompt_text="prompt",
+                keyword_rules=(),
+                final_record={
+                    "商品信息": {"商品ID": "1", "商品标题": "全新未拆封"},
+                    "卖家信息": {},
+                    "价格参考": {"本商品价格位置": {"market_median_price": 349.5}},
+                    "price_insight": {"deal_label": "价格偏高"},
+                },
+                seller_id="seller-1",
+                zhima_credit_text="优秀",
+                registration_duration_text="来闲鱼1年",
+            )
+        )
+        await dispatcher.join()
+
+    asyncio.run(run())
+
+    assert len(ai_facing_records) == 1
+    assert "价格参考" not in ai_facing_records[0]
+    assert "price_insight" not in ai_facing_records[0]
+    assert ai_facing_records[0]["商品信息"]["商品ID"] == "1"
+
+    assert saved_records[0]["价格参考"] == {"本商品价格位置": {"market_median_price": 349.5}}
+    assert saved_records[0]["price_insight"] == {"deal_label": "价格偏高"}
+
+
 def test_item_analysis_dispatcher_supports_keyword_mode_without_ai():
     saved_records = []
 

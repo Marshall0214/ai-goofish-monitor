@@ -11,14 +11,37 @@ from urllib.parse import urlencode, urlparse, urlunparse, parse_qsl
 
 import requests
 
-# 设置标准输出编码为UTF-8，解决Windows控制台编码问题
-if sys.platform.startswith('win'):
-    import codecs
-    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
-    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
+# 设置标准输出编码为UTF-8，解决Windows控制台编码问题。
+#
+# 用 sys.stdout.reconfigure(encoding=...) 而不是老版本那种
+# sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach()) 的写法，原因有两个：
+#
+# 1. detach() 会把原来的 TextIOWrapper 拆成裸的二进制 buffer，再用
+#    codecs.getwriter 包一层——包出来的 codecs.StreamWriter 不是 TextIOWrapper，
+#    不具备"连接到交互式终端时自动按行 flush"这个行为，输出会一直攒在缓冲区里，
+#    直到缓冲区写满、进程退出、或者被 Ctrl+C 中断触发清理时才会一次性吐出来。
+#    现象就是脚本"卡住不输出，一按 Ctrl+C 就哗地全打出来"——其实脚本一直在正常
+#    跑，只是看不到实时输出，很容易被误判成卡死。reconfigure() 只是原地改
+#    已有 TextIOWrapper 的编码，不拆流、不动缓冲策略，行为跟原来的控制台输出
+#    完全一致，只是编码变成了 UTF-8。
+# 2. detach() 在被 pytest 收集/导入时（本模块被别的测试文件间接 import）会把
+#    pytest 自己接管 sys.stdout 用来做输出捕获的缓冲区拆走，导致后续任何一次
+#    输出捕获读取都报 "ValueError: underlying buffer has been detached"，
+#    整个测试会话直接崩溃（现象是 collected 0 items，报错还没来得及打印出来
+#    就已经崩了）。reconfigure() 不拆流，天然没有这个问题；这里仍然加一层
+#    "pytest" in sys.modules 的判断做双重保险。
+if sys.platform.startswith('win') and 'pytest' not in sys.modules:
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except (AttributeError, ValueError):
+        # 极少数环境下 sys.stdout/stderr 已经被替换成不支持 reconfigure() 的
+        # 对象（比如某些 IDE 内置终端），这种情况下直接跳过，不影响正常运行。
+        pass
 
 from src.config import (
     AI_DEBUG_MODE,
+    AI_MAX_OUTPUT_TOKENS,
     IMAGE_DOWNLOAD_HEADERS,
     IMAGE_SAVE_DIR,
     TASK_IMAGE_DIR_PREFIX,
@@ -238,9 +261,17 @@ def encode_image_to_base64(image_path):
 
 
 def validate_ai_response_format(parsed_response):
-    """验证AI响应的格式是否符合预期结构"""
+    """验证AI响应的格式是否符合预期结构。
+
+    注意：prompt_version 故意不在必需字段里——它只是 prompts/base_prompt.txt
+    示例 JSON 里带的一个版本号，整个代码库里没有任何地方读取/使用这个字段
+    （不落库、不展示、不参与任何判断逻辑），纯粹是装饰性的。之前把它也列进
+    必需字段，会导致模型只要没有复述这个对业务毫无意义的版本号，整条正常、
+    可用的分析结果（is_recommended/reason/criteria_analysis 都齐全）就被
+    整体判定失败、白白重试 3-4 次，浪费 AI 调用次数和时间，模型本身并没有
+    "分析错"，只是没有回显一个没人用的字段。
+    """
     required_fields = [
-        "prompt_version",
         "is_recommended",
         "reason",
         "risk_tags",
@@ -385,7 +416,7 @@ async def get_ai_analysis(product_data, image_paths=None, prompt_text=""):
                 model=MODEL_NAME,
                 messages=messages,
                 temperature=current_temperature,
-                max_output_tokens=4000,
+                max_output_tokens=AI_MAX_OUTPUT_TOKENS,
                 enable_json_output=use_response_format,
             )
             if not use_temperature:

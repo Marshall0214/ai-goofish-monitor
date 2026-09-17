@@ -183,10 +183,12 @@ class AIClient:
         messages: List[Dict],
         *,
         temperature: float = 0.1,
-        max_output_tokens: int = 4000,
+        max_output_tokens: Optional[int] = None,
         enable_json_output: Optional[bool] = None,
     ) -> str:
         """调用 AI API"""
+        if max_output_tokens is None:
+            max_output_tokens = self.settings.max_output_tokens
         api_mode = CHAT_COMPLETIONS_API_MODE
         use_response_format = (
             self.settings.enable_response_format
